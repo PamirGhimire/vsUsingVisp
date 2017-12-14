@@ -38,97 +38,114 @@ int main(int argc, char **argv) {
     //*******************************************
     //*************TODO by STUDENTS**************
     //*******************************************
-    // Part 1: Image acquisition
-
-    // Part 2: Dot detection and tracking
-
-    //Initiate the tracker
+    //Initiate the tracker for big dot in the center
     vpDot2 dotDetector;
-    //Set the graphics to true
+
+    //Enable display of previous tracker's track
     dotDetector.setGraphics(true);
-    //check for initialization
+
+    //Initialization of the central dot tracker
     bool init_done = false;
-    //convertion of image into image points
+
+    //Track of the central dot tracker (in image frame)
     vpImagePoint coordinates;
 
-    //--------------------------------------------
-    // for part 2
-    bool fourPointsAcquired = false;
-
-    // cam parameters
+    // Apriori:
+    // Camera Intrinsics, used later for pose estimation
     int alphau = 535;
     int alphav = 535;
     int u0 = 320;
     int v0 = 240;
 
+    // camera-parameters object using known intrinsics
     vpCameraParameters camParams(alphau, alphav, u0, v0);\
 
-    vector<vpPoint> dotObjectCoords(4);
+    // coordinates of dots in object and sensor frames (unit = meters)
+    vector<vpPoint> dotCoords(4);
+    // coordinates of dots in image frame (unit = pixels)
     vector<vpImagePoint> dotImCoords(4);
 
-    dotObjectCoords[0].setWorldCoordinates(-0.1,-0.1, 0);
-    dotObjectCoords[1].setWorldCoordinates(0.1,-0.1, 0);
-    dotObjectCoords[2].setWorldCoordinates(0.1,0.1, 0);
-    dotObjectCoords[3].setWorldCoordinates(-0.1,0.1, 0);
+    // known object-frame coordinates of four corner dots in pattern
+    dotCoords[0].setWorldCoordinates(-0.1,-0.1, 0);
+    dotCoords[1].setWorldCoordinates(0.1,-0.1, 0);
+    dotCoords[2].setWorldCoordinates(0.1,0.1, 0);
+    dotCoords[3].setWorldCoordinates(-0.1,0.1, 0);
 
     // 4 dot trackers to track 4 dots on image
     vpDot2 dot0tracker;
     dot0tracker.setGraphics(true);
-    bool initd0;
+    bool initd0 = false;
 
     vpDot2 dot1tracker;
     dot1tracker.setGraphics(true);
-    bool initd1;
+    bool initd1 = false;
 
     vpDot2 dot2tracker;
     dot2tracker.setGraphics(true);
-    bool initd2;
+    bool initd2 = false;
 
     vpDot2 dot3tracker;
     dot3tracker.setGraphics(true);
-    bool initd3;
+    bool initd3 = false;
 
     int nTrackersInitialized = 0;
 
     //------------------------------
+    // Pose estimation object to estimate pose of 4-dots pattern
     vpPose dotPatternPose;
+    // relative pose between pattern and camera
+    vpHomogeneousMatrix cMo;
+
 
     //while 1 for Part 1
     while(1){
-        //grab the image for each lopping process
+        // grab an image from the video device
         bool videoStarted = device.getVideo(I);
 
-        //set the display as the image just grabbed
+        //set at the display the image just grabbed
         vpDisplay::display(I);
 
-        //If Init is not done // click to init **** If 1
+        //If central dot-tracker not initialized
         if (! init_done) {
-            if (vpDisplay::getClick(I, coordinates, false)) { // click grabber *** If 2
+            // get image coordinates of mouse click in display-window
+            if (vpDisplay::getClick(I, coordinates, false)) {
+                // initialize central-dot tracker at location of latest click
                 dotDetector.initTracking(I, coordinates);
-                init_done = true; //Init is done
-            } // click grabber *** If 2
+                init_done = true;
+            }
         }
+        // If central dot-tracker initialized
         else {
-            dotDetector.track(I); //Set the tracking method
+            // track the central dot
+            dotDetector.track(I);
 
-        }//If Init is not done // click to init **** If 1
+        }
 
 
-        // INITIALIZATON OF 4 DOT TRACKERS
+        // 4 DOT TRACKERS:
+        //---------------------------------
         // if dot0 tracker not initialized
         if(!initd0){
+            // if click on display window and central dot-tracker is already initialized
             if (vpDisplay::getClick(I, coordinates, false)&& nTrackersInitialized == 0 && init_done) {
+                // initialize dot0 tracker with location of latest click
                 dot0tracker.initTracking(I, coordinates);
                 nTrackersInitialized++;
                 initd0 = true;
             }
-        }else{
+        }
+        // if dot0-tracker is initialized
+        else{
+            // track it
             dot0tracker.track(I, dotImCoords[0]);
         }
 
-        // if dot0 tracker not initialized
+        //---------------------------------
+        // if dot1 tracker not initialized
         if(!initd1){
+            // if click on display window and dot0-tracker is already initialized
             if (vpDisplay::getClick(I, coordinates, false) && nTrackersInitialized == 1 && initd0) {
+                // initialize dot1 tracker with location of latest click
                 dot1tracker.initTracking(I, coordinates);
                 nTrackersInitialized++;
                 initd1 = true;
@@ -137,7 +154,7 @@ int main(int argc, char **argv) {
             dot1tracker.track(I, dotImCoords[1]);
         }
 
-        // if dot0 tracker not initialized
+        // if dot2 tracker not initialized
         if(!initd2){
             if (vpDisplay::getClick(I, coordinates, false) && nTrackersInitialized == 2 && initd1) {
                 dot2tracker.initTracking(I, coordinates);
@@ -148,7 +165,7 @@ int main(int argc, char **argv) {
             dot2tracker.track(I, dotImCoords[2]);
         }
 
-        // if dot0 tracker not initialized
+        // if dot3 tracker not initialized
         if(!initd3){
             if (vpDisplay::getClick(I, coordinates, false) && nTrackersInitialized == 3 && initd2) {
                 dot3tracker.initTracking(I, coordinates);
@@ -160,20 +177,19 @@ int main(int argc, char **argv) {
         }
 
 
-        // PART 2C : Image to sensor coordinates
-        if (initd3)
-        {int npoints = 4;
+        // If all 4 dot-trackers have been initialized
+        if (initd3){
+            int npoints = 4;
+            // convert image coordinates of all 4 dots to sensor coordinates
             for (int npoint = 0; npoint < npoints; npoint++){
                 double x, y;
                 vpPixelMeterConversion::convertPoint(camParams, dotImCoords[npoint], x, y);
-                dotObjectCoords[npoint].set_x(x);
-                dotObjectCoords[npoint].set_y(y);
+                dotCoords[npoint].set_x(x);
+                dotCoords[npoint].set_y(y);
 
-                dotPatternPose.addPoint(dotObjectCoords[npoint]);
-
+                dotPatternPose.addPoint(dotCoords[npoint]);
             }
 
-            vpHomogeneousMatrix cMo;
             dotPatternPose.computePose(vpPose::LAGRANGE,cMo);
             dotPatternPose.display(I,cMo,camParams,0.05,vpColor::green);
         }
@@ -185,49 +201,58 @@ int main(int argc, char **argv) {
         }
 
     }//end while 1
-    // End of first part
-    // PART 2C : Image to sensor coordinates
+
+
+    // convert image coordinates of 4 dots in the latest tracked frame
+    // into sensor coordinates
     int npoints = 4;
     for (int npoint = 0; npoint < npoints; npoint++){
         double x, y;
         vpPixelMeterConversion::convertPoint(camParams, dotImCoords[npoint], x, y);
-        dotObjectCoords[npoint].set_x(x);
-        dotObjectCoords[npoint].set_y(y);
+        dotCoords[npoint].set_x(x);
+        dotCoords[npoint].set_y(y);
 
-        dotPatternPose.addPoint(dotObjectCoords[npoint]);
-
+        dotPatternPose.addPoint(dotCoords[npoint]);
     }
 
-    vpHomogeneousMatrix cMo;
+    // compute the relative pose between cam and pattern in latest tracked frame
     dotPatternPose.computePose(vpPose::LAGRANGE,cMo);
+    // visualize the relative pose of the pattern
     dotPatternPose.display(I,cMo,camParams,0.05,vpColor::green);
-
-
     //display
     vpDisplay::flush(I);
 
-
     //-----------------------------------------
+    // VIRTUAL VISUAL SERVOING (POINTS BASED):
+    //-----------------------------------------
+    // virtual cam. that will be visually servoed
     vpRobotCamera virtualRobot;
+    // initialize its pose wrt object at pose of cam. in last tracked frame
     virtualRobot.setPosition(cMo);
 
+    // visual servo task object handles all computations related to visual servoing
     vpServo task;
+    // eye-in-hand configuration
     task.setServo(vpServo::EYEINHAND_CAMERA);
+    // interaction matrix computed from current features
     task.setInteractionMatrixType(vpServo::CURRENT);
+    // gain
     task.setLambda(0.5);
 
+    // arbitrarily chosen desired pose of camera wrt object
     vpHomogeneousMatrix cdMo(0, 0, 0.45, 0, 0, 0);
-    vpFeaturePoint p[4], pd[4] ;
+    // arrays for current and desired image features (dot coordinates)
+    vpFeaturePoint p[4], pd[4];
 
     for (unsigned int i = 0 ; i < 4 ; i++) {
         // project points in setup onto cam. at desired pose
         // to get desired image features (=  desired cooridnates)
-        dotObjectCoords[i].track(cdMo);
-        vpFeatureBuilder::create(pd[i], dotObjectCoords[i]);
+        dotCoords[i].track(cdMo);
+        vpFeatureBuilder::create(pd[i], dotCoords[i]);
         // project points in setup onto cam at current pose
         // to get current image features
-        dotObjectCoords[i].track(cMo);
-        vpFeatureBuilder::create(p[i], dotObjectCoords[i]);
+        dotCoords[i].track(cMo);
+        vpFeatureBuilder::create(p[i], dotCoords[i]);
         // add features to task
         task.addFeature(p[i], pd[i]);
     }
@@ -241,11 +266,12 @@ int main(int argc, char **argv) {
     // get current pose of the robot in the world
     robot.getPosition(wMc);
 
+    // get object2world from cam2world since object2cam is known
     wMo = wMc * cMo;
 
-
-
+    // VISUAL SERVOING:
     for (unsigned int iter = 0; iter < 1500; iter++){
+        // print current iteration
         cout << "--- iter " << iter << " ------------" << endl;
 
         robot.getPosition(wMc);
@@ -254,8 +280,8 @@ int main(int argc, char **argv) {
         cMo = wMc.inverse() * wMo;
 
         for (int i = 0; i < 4; i++){
-            dotObjectCoords[i].track(cMo);
-            vpFeatureBuilder::create(p[i], dotObjectCoords[i]);
+            dotCoords[i].track(cMo);
+            vpFeatureBuilder::create(p[i], dotCoords[i]);
         }
 
         vpColVector v = task.computeControlLaw();
@@ -268,9 +294,11 @@ int main(int argc, char **argv) {
         vpDisplay::flush(I);
     }
 
+    // compare final cMo with cdMo
     cout << "------ \n cdMo = " << cdMo << endl;
     task.kill();
 
+    // display the would-be estimate of pattern pose at cdMo
     dotPatternPose.display(I,cdMo,camParams,0.05,vpColor::cyan);
     //display
     vpDisplay::flush(I);
